@@ -1,0 +1,178 @@
+TP – Administration SSH et Serveur Web Nginx
+Partie 1 – Mise en place de l’environnement virtualisé
+
+J’ai installé VirtualBox sur ma machine. Ensuite, j’ai créé une VM Ubuntu avec 2 Go de RAM et 20 Go de disque. Pour le réseau, j’ai choisi Bridged Adapter pour que la VM ait une IP sur le même réseau que mon hôte.
+
+Après le démarrage de la VM, j’ai vérifié son IP avec :
+
+ip a
+
+
+et j’ai testé la connexion depuis ma machine hôte :
+
+ping <IP_VM>
+
+
+Tout fonctionne, je peux accéder à la VM.
+
+Partie 2 – Serveur SSH
+
+J’ai installé le serveur SSH sur ma VM :
+
+sudo apt update
+sudo apt install openssh-server -y
+
+
+J’ai vérifié que le service SSH est actif et écoute sur le port 22 :
+
+systemctl status ssh
+ss -tuln | grep 22
+
+
+Depuis ma machine hôte, je me suis connecté :
+
+ssh etudiant@<IP_VM>
+
+
+J’ai généré une clé SSH sur ma machine cliente :
+
+ssh-keygen -t rsa -b 4096
+
+
+Puis je l’ai copiée sur le serveur pour me connecter sans mot de passe :
+
+ssh-copy-id etudiant@<IP_VM>
+
+Partie 3 – Sécurisation SSH
+
+Pour sécuriser SSH, j’ai modifié le fichier /etc/ssh/sshd_config :
+
+J’ai interdit l’accès root :
+
+PermitRootLogin no
+
+
+J’ai désactivé l’authentification par mot de passe :
+
+PasswordAuthentication no
+
+
+J’ai changé le port par défaut pour réduire les tentatives de brute-force :
+
+Port 2222
+
+
+J’ai redémarré SSH :
+
+sudo systemctl restart ssh
+
+
+J’ai testé la connexion avec le nouveau port :
+
+ssh -p 2222 etudiant@<IP_VM>
+
+
+Pour simplifier mes connexions, j’ai créé un alias dans ~/.ssh/config :
+
+Host vm-tp
+    HostName <IP_VM>
+    User etudiant
+    Port 2222
+    IdentityFile ~/.ssh/id_rsa
+
+Partie 4 – Transfert de fichiers
+
+J’ai transféré un fichier et un dossier vers le serveur :
+
+Avec SCP :
+
+scp fichier.txt etudiant@<IP_VM>:/home/etudiant/
+
+
+Avec SFTP :
+
+sftp etudiant@<IP_VM>
+sftp> put fichier.txt
+sftp> put -r dossier/
+sftp> ls
+
+
+Avec RSYNC :
+
+rsync -avz dossier/ etudiant@<IP_VM>:/home/etudiant/dossier_rsync/
+
+Partie 5 – Analyse des logs et sécurité
+
+J’ai suivi les logs d’authentification SSH :
+
+sudo tail -f /var/log/auth.log
+
+
+J’ai installé Fail2Ban pour bannir les IP après plusieurs tentatives échouées :
+
+sudo apt install fail2ban -y
+sudo systemctl enable --now fail2ban
+sudo fail2ban-client status
+
+Partie 6 – Tunnel SSH
+
+Pour accéder à un service web distant via SSH, j’ai créé un tunnel local :
+
+ssh -L 8080:localhost:80 etudiant@<IP_VM>
+
+
+Pour permettre l’accès SSH au client via le serveur, j’ai créé un tunnel distant :
+
+ssh -R 2222:localhost:22 etudiant@<IP_VM>
+
+Partie 7 – Nginx et HTTPS
+
+J’ai installé Nginx :
+
+sudo apt install nginx -y
+
+
+J’ai créé un site test :
+
+sudo mkdir -p /var/www/site-tp
+echo "Bienvenue sur mon site TP" | sudo tee /var/www/site-tp/index.html
+
+
+J’ai configuré Nginx pour servir ce site sur HTTP. Ensuite, j’ai généré un certificat auto-signé pour HTTPS :
+
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/site-tp.key -out /etc/ssl/certs/site-tp.crt
+
+
+J’ai configuré Nginx pour HTTPS et redirection HTTP → HTTPS, puis j’ai testé depuis ma machine cliente :
+
+curl -k https://<IP_VM>
+
+Partie 8 – Firewall et permissions
+
+J’ai autorisé Nginx dans le firewall :
+
+sudo ufw allow 'Nginx Full'
+sudo ufw enable
+sudo ufw status
+
+
+J’ai vérifié et ajusté les permissions sur /var/www/site-tp pour que Nginx puisse lire les fichiers :
+
+sudo chown -R www-data:www-data /var/www/site-tp
+sudo chmod -R 755 /var/www/site-tp
+
+Partie 9 – Validation finale
+
+À la fin du TP :
+
+SSH fonctionne sur le port personnalisé avec authentification par clé uniquement.
+
+Fail2Ban est actif et opérationnel.
+
+Les transferts de fichiers fonctionnent avec SCP, SFTP et RSYNC.
+
+Nginx est accessible en HTTP et HTTPS, avec redirection automatique.
+
+Le certificat SSL est valide (auto-signé).
+
+Le firewall est configuré et les permissions sur /var/www/site-tp sont correctes.
