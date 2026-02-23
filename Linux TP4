@@ -176,3 +176,117 @@ Nginx est accessible en HTTP et HTTPS, avec redirection automatique.
 Le certificat SSL est valide (auto-signé).
 
 Le firewall est configuré et les permissions sur /var/www/site-tp sont correctes.
+
+10. Tunnels SSH
+Tunnel local
+ssh -L 8080:localhost:80 serveur-tp
+
+Accéder ensuite depuis le client :
+
+http://localhost:8080
+
+Le trafic est chiffré via SSH.
+
+Tunnel distant
+ssh -R 9090:localhost:22 serveur-tp
+
+Permet au serveur d’accéder au SSH du client.
+
+11. Diagnostic
+
+Méthode de dépannage :
+
+vérifier IP
+
+vérifier ping
+
+vérifier service SSH
+
+vérifier port
+
+vérifier permissions
+
+vérifier logs
+
+Commandes utiles :
+
+ip a
+ping <IP>
+sudo systemctl status ssh
+sudo ss -tlnp
+sudo tail -f /var/log/auth.log
+12. Installation Nginx
+sudo apt update
+sudo apt install nginx
+sudo systemctl status nginx
+Page web
+sudo mkdir -p /var/www/site-tp
+sudo vim /var/www/site-tp/index.html
+
+Contenu :
+
+<h1>Bienvenue sur le site TP Nginx !</h1>
+Configuration
+sudo vim /etc/nginx/sites-available/site-tp
+server {
+    listen 80;
+    server_name localhost;
+    root /var/www/site-tp;
+    index index.html;
+}
+
+Activer :
+
+sudo ln -s /etc/nginx/sites-available/site-tp /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+
+Tester :
+
+http://<IP_VM>
+13. HTTPS (certificat auto-signé)
+Génération
+sudo mkdir -p /etc/nginx/ssl
+cd /etc/nginx/ssl
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout site-tp.key -out site-tp.crt
+Configuration HTTPS
+
+Modifier :
+
+sudo vim /etc/nginx/sites-available/site-tp
+server {
+    listen 443 ssl;
+    server_name localhost;
+
+    ssl_certificate /etc/nginx/ssl/site-tp.crt;
+    ssl_certificate_key /etc/nginx/ssl/site-tp.key;
+
+    root /var/www/site-tp;
+    index index.html;
+}
+
+server {
+    listen 80;
+    server_name localhost;
+    return 301 https://$host$request_uri;
+}
+
+Redémarrer :
+
+sudo nginx -t
+sudo systemctl restart nginx
+
+Test :
+
+curl -k https://<IP_VM>
+
+Résultat : site accessible en HTTPS.
+
+14. Firewall et permissions
+sudo ufw allow 'Nginx Full'
+sudo ufw status
+
+Permissions :
+
+sudo chown -R www-data:www-data /var/www/site-tp
+sudo chmod -R 755 /var/www/site-tp
