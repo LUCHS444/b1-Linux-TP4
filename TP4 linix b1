@@ -1,0 +1,308 @@
+TP — Mise en place d’un serveur Linux sécurisé (SSH + Nginx + HTTPS)
+1. Mise en place de l’environnement virtualisé
+Installation de VirtualBox (machine hôte)
+sudo apt update
+sudo apt install virtualbox
+virtualbox --help
+
+Résultat : VirtualBox est installé et fonctionnel.
+Il permet d’exécuter une machine virtuelle simulant un serveur distant.
+
+Création de la VM
+
+Paramètres :
+
+Nom : Serveur-SSH
+
+Type : Linux
+
+Version : Ubuntu 64-bit
+
+RAM : 2048 Mo
+
+Disque : 20 Go VDI dynamique
+
+Objectif : simuler un serveur réel séparé du client.
+
+Configuration réseau
+
+Mode réseau : Bridged Adapter (Accès par pont)
+
+La VM reçoit sa propre adresse IP sur le réseau local.
+
+Dans la VM :
+
+ip a
+
+Depuis la machine hôte :
+
+ping <IP_VM>
+
+Résultat : la machine hôte communique avec la VM.
+
+2. Installation du serveur SSH
+
+Dans la VM :
+
+sudo apt update
+sudo apt install openssh-server
+
+Vérifier le service :
+
+sudo systemctl status ssh
+
+On doit voir :
+
+Active: active (running)
+
+Vérifier que le port écoute :
+
+sudo ss -tlnp | grep ssh
+
+Résultat : le serveur SSH écoute sur le port 22.
+
+3. Première connexion SSH
+
+Depuis la machine hôte :
+
+ssh etudiant@<IP_VM>
+
+accepter la clé : yes
+
+entrer le mot de passe
+
+Résultat : connexion distante réussie.
+
+La clé du serveur est enregistrée dans :
+
+~/.ssh/known_hosts
+4. Authentification par clé
+Génération de clé (sur le client)
+ssh-keygen -t ed25519
+
+Appuyer sur Entrée pour tout.
+
+Création de :
+
+clé privée : ~/.ssh/id_ed25519
+
+clé publique : ~/.ssh/id_ed25519.pub
+
+Copier la clé sur le serveur
+ssh-copy-id etudiant@<IP_VM>
+Test
+ssh etudiant@<IP_VM>
+
+Résultat : connexion sans mot de passe.
+
+5. Sécurisation du serveur SSH
+
+Sur le serveur :
+
+sudo vim /etc/ssh/sshd_config
+
+Modifier :
+
+PasswordAuthentication no
+PermitRootLogin no
+Port 2222
+
+Redémarrer :
+
+sudo systemctl restart ssh
+
+Tester :
+
+ssh -p 2222 etudiant@<IP_VM>
+
+Résultat :
+
+mot de passe désactivé
+
+root interdit
+
+port SSH changé
+
+6. Alias SSH
+
+Sur le client :
+
+vim ~/.ssh/config
+
+Ajouter :
+
+Host serveur-tp
+    HostName <IP_VM>
+    User etudiant
+    Port 2222
+
+Connexion :
+
+ssh serveur-tp
+
+Résultat : connexion simplifiée.
+
+7. Transfert de fichiers
+SCP
+scp fichier.txt serveur-tp:/home/etudiant/
+scp -r dossier/ serveur-tp:/home/etudiant/
+SFTP
+sftp serveur-tp
+
+Commandes utiles :
+
+put fichier.txt
+get fichier.txt
+ls
+exit
+RSYNC
+rsync -avz dossier/ serveur-tp:/home/etudiant/dossier/
+
+Résultat : synchronisation efficace et compressée.
+
+8. Analyse des logs SSH
+
+Sur le serveur :
+
+sudo tail -f /var/log/auth.log
+
+Observer :
+
+connexion réussie
+
+mauvais mot de passe
+
+mauvaise clé
+
+mauvais port
+
+Résultat : surveillance en temps réel des connexions SSH.
+
+9. Fail2Ban
+
+Installation :
+
+sudo apt install fail2ban
+
+Vérification :
+
+sudo systemctl status fail2ban
+sudo fail2ban-client status sshd
+
+Simuler plusieurs erreurs de connexion.
+
+Résultat : l’adresse IP attaquante est bannie automatiquement.
+
+10. Tunnels SSH
+Tunnel local
+ssh -L 8080:localhost:80 serveur-tp
+
+Accéder ensuite depuis le client :
+
+http://localhost:8080
+
+Le trafic est chiffré via SSH.
+
+Tunnel distant
+ssh -R 9090:localhost:22 serveur-tp
+
+Permet au serveur d’accéder au SSH du client.
+
+11. Diagnostic
+
+Méthode de dépannage :
+
+vérifier IP
+
+vérifier ping
+
+vérifier service SSH
+
+vérifier port
+
+vérifier permissions
+
+vérifier logs
+
+Commandes utiles :
+
+ip a
+ping <IP>
+sudo systemctl status ssh
+sudo ss -tlnp
+sudo tail -f /var/log/auth.log
+12. Installation Nginx
+sudo apt update
+sudo apt install nginx
+sudo systemctl status nginx
+Page web
+sudo mkdir -p /var/www/site-tp
+sudo vim /var/www/site-tp/index.html
+
+Contenu :
+
+<h1>Bienvenue sur le site TP Nginx !</h1>
+Configuration
+sudo vim /etc/nginx/sites-available/site-tp
+server {
+    listen 80;
+    server_name localhost;
+    root /var/www/site-tp;
+    index index.html;
+}
+
+Activer :
+
+sudo ln -s /etc/nginx/sites-available/site-tp /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+
+Tester :
+
+http://<IP_VM>
+13. HTTPS (certificat auto-signé)
+Génération
+sudo mkdir -p /etc/nginx/ssl
+cd /etc/nginx/ssl
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout site-tp.key -out site-tp.crt
+Configuration HTTPS
+
+Modifier :
+
+sudo vim /etc/nginx/sites-available/site-tp
+server {
+    listen 443 ssl;
+    server_name localhost;
+
+    ssl_certificate /etc/nginx/ssl/site-tp.crt;
+    ssl_certificate_key /etc/nginx/ssl/site-tp.key;
+
+    root /var/www/site-tp;
+    index index.html;
+}
+
+server {
+    listen 80;
+    server_name localhost;
+    return 301 https://$host$request_uri;
+}
+
+Redémarrer :
+
+sudo nginx -t
+sudo systemctl restart nginx
+
+Test :
+
+curl -k https://<IP_VM>
+
+Résultat : site accessible en HTTPS.
+
+14. Firewall et permissions
+sudo ufw allow 'Nginx Full'
+sudo ufw status
+
+Permissions :
+
+sudo chown -R www-data:www-data /var/www/site-tp
+sudo chmod -R 755 /var/www/site-tp
